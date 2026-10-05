@@ -1,0 +1,37 @@
+import FastSpacesCore
+@MainActor func runShortcutTests() {
+ func key(_ code: UInt16 = 123, down: Bool = true, flags: Modifiers = .control, repeatKey: Bool = false) -> KeyInput {
+  KeyInput(code: code, isDown: down, modifiers: flags, isRepeat: repeatKey)
+ }
+ var state = ShortcutState()
+ check(state.handle(key(), ready: true) == .switchSpace(.previous), "Control left switches previous")
+ check(state.hasConsumedKeys, "tracks swallowed down")
+ check(state.handle(key(repeatKey: true), ready: true) == .consume, "held shortcut never switches twice")
+ check(state.handle(key(down: false, flags: []), ready: false) == .consume, "release consumed after disable or modifier release")
+ check(!state.hasConsumedKeys, "release clears tracking")
+ check(state.handle(key(124, flags: [.control, .capsLock, .function]), ready: true) == .switchSpace(.next), "right accepts caps lock and physical arrow flags")
+ state.reset()
+ for modifier: Modifiers in [.command, .option, .shift] {
+  check(state.handle(key(flags: [.control, modifier]), ready: true) == .passThrough, "extra modifier passes")
+ }
+ check(state.handle(key(flags: []), ready: true) == .passThrough, "plain arrow passes")
+ check(state.handle(key(12), ready: true) == .passThrough, "unrelated key passes")
+ check(state.handle(key(), ready: false) == .passThrough, "unready shortcut passes")
+ check(state.handle(key(repeatKey: true), ready: true) == .passThrough, "native held key is not captured when enabled")
+ check(state.handle(key(down: false), ready: true) == .passThrough, "unconsumed release passes")
+ _ = state.handle(key(), ready: true)
+ state.discardConsumedPress(code: 123)
+ check(state.handle(key(repeatKey: true), ready: true) == .passThrough, "rejected injection repeat passes")
+ check(state.handle(key(down: false), ready: true) == .passThrough, "rejected injection release passes")
+ _ = state.handle(key(), ready: true)
+ state.reset()
+ check(!state.hasConsumedKeys, "session reset clears consumed keys")
+ _ = state.handle(key(), ready: true)
+ _ = state.handle(key(124), ready: true)
+ state.recoverHeldKeys { $0 == 123 }
+ check(state.handle(key(repeatKey: true), ready: true) == .consume, "timeout preserves physically held consumed repeats")
+ check(state.handle(key(down: false), ready: true) == .consume, "timeout preserves paired release")
+ check(state.handle(key(124), ready: true) == .switchSpace(.next), "missed release reconciled before new press")
+ state.reset()
+
+}
