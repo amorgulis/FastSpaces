@@ -6,7 +6,8 @@ import GestureBridge
 final class PreparedSwipe: @unchecked Sendable {
  private let sequence: OpaquePointer
  init?(_ direction: Direction) {
-  guard let sequence = FSPrepareSwipe(direction.rawValue) else { return nil }
+  let prepared = direction == .missionControl ? FSPrepareMissionControl() : FSPrepareSwipe(direction.rawValue)
+  guard let sequence = prepared else { return nil }
   self.sequence = sequence
  }
  func post() { FSPostSwipe(sequence) }
@@ -98,7 +99,7 @@ final class PreparedSwipe: @unchecked Sendable {
   else if !trusted { statusLine.title = "Accessibility permission required." }
   else if let tapFailure { statusLine.title = tapFailure }
   else if session.isSuspended { statusLine.title = "Paused while session is inactive." }
-  else { statusLine.title = enabled ? "Active — Control ← / →" : "Fast switching disabled." }
+  else { statusLine.title = enabled ? "Active — Control ← / → / ↑" : "Fast switching disabled." }
  }
  private func sessionChanged(_ event: SessionEvent) {
   session.handle(event)
@@ -118,7 +119,7 @@ final class PreparedSwipe: @unchecked Sendable {
  @objc private func showHelp() {
   let alert = NSAlert()
   alert.messageText = "Fast Spaces"
-  alert.informativeText = "Control–Left/Right switches to an adjacent Space using a high-velocity gesture. Switching targets the display under your pointer. Each press switches once; holding a key does not repeat. Other shortcuts and real trackpad gestures pass through. Uses the gesture pathway you verified on macOS 27."
+  alert.informativeText = "Control–Left/Right switches to an adjacent Space using a high-velocity gesture. Control–Up opens Mission Control using a fast vertical gesture. Switching targets the display under your pointer. Each press switches once; holding a key does not repeat. Other shortcuts and real trackpad gestures pass through. Uses the gesture pathway you verified on macOS 27."
   alert.addButton(withTitle: "OK")
   NSApp.activate(ignoringOtherApps: true); alert.runModal()
  }

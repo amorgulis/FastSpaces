@@ -3,6 +3,15 @@ import FastSpacesCore
  func key(_ code: UInt16 = 123, down: Bool = true, flags: Modifiers = .control, repeatKey: Bool = false) -> KeyInput {
   KeyInput(code: code, isDown: down, modifiers: flags, isRepeat: repeatKey)
  }
+ var up = ShortcutState()
+ check(up.handle(key(126), ready: true) == .switchSpace(.missionControl), "Control up accepts Mission Control")
+ check(up.handle(key(126, repeatKey: true), ready: true) == .consume, "held up does not repeat")
+ check(up.handle(key(126, down: false, flags: []), ready: false) == .consume, "up release drains after disable")
+ for modifier: Modifiers in [.command, .option, .shift] {
+  check(up.handle(key(126, flags: [.control, modifier]), ready: true) == .passThrough, "modified up passes through")
+ }
+ check(up.handle(key(126), ready: false) == .passThrough, "unready up passes through")
+ check(up.handle(key(125), ready: true) == .passThrough, "Control down remains native")
  var state = ShortcutState()
  check(state.handle(key(), ready: true) == .switchSpace(.previous), "Control left switches previous")
  check(state.hasConsumedKeys, "tracks swallowed down")

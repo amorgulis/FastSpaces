@@ -1,4 +1,4 @@
-public enum Direction: Int32, Sendable { case previous = -1, next = 1 }
+public enum Direction: Int32, Sendable { case previous = -1, next = 1, missionControl = 2 }
 public struct Modifiers: OptionSet, Sendable {
  public let rawValue: UInt64
  public init(rawValue: UInt64) { self.rawValue = rawValue }
@@ -28,7 +28,7 @@ public struct ShortcutState {
   if consumed.contains(input.code) { return .consume }
   guard ready, !input.isRepeat, input.modifiers.contains(.control), input.modifiers.intersection([.command, .option, .shift]).isEmpty else { return .passThrough }
   let direction: Direction
-  switch input.code { case 123: direction = .previous; case 124: direction = .next; default: return .passThrough }
+  switch input.code { case 123: direction = .previous; case 124: direction = .next; case 126: direction = .missionControl; default: return .passThrough }
   consumed.insert(input.code)
   return .switchSpace(direction)
  }

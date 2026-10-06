@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/sysctl.h>
 #include <dlfcn.h>
 #include <dispatch/dispatch.h>
@@ -35,7 +36,7 @@ static const CGEventField kCGEventRawIOHIDPayload       = 4205;
 
 enum { kCGSEventGesture = 29, kCGSEventDockControl = 30 };
 enum { kIOHIDEventTypeDockSwipe = 23 };
-enum { kCGGestureMotionHorizontal = 1 };
+enum { kCGGestureMotionHorizontal = 1, kCGGestureMotionVertical = 2 };
 enum { kGestureBegan = 1, kGestureChanged = 2, kGestureEnded = 4, kGestureCancelled = 8 };
 
 // macOS 26 reports horizontal swipe direction opposite to earlier releases.
@@ -129,7 +130,14 @@ static uint8_t *generate_iohid_payload(CGEventRef event, size_t *out_length) {
 
     IOHIDSystemQueueElementHeader *header = (IOHIDSystemQueueElementHeader *)payload;
     uint64_t timestamp = CGEventGetTimestamp(event);
-    header->timestamp = timestamp ? timestamp : mach_absolute_time();
+    // CGEvent timestamps are nanoseconds; IOHID queue headers use Mach ticks.
+    // Native captures confirm the timebase conversion on Apple silicon.
+    mach_timebase_info_data_t timebase;
+    if (timestamp && mach_timebase_info(&timebase) == KERN_SUCCESS && timebase.numer) {
+        header->timestamp = (uint64_t)(((__uint128_t)timestamp * timebase.denom) / timebase.numer);
+    } else {
+        header->timestamp = mach_absolute_time();
+    }
     header->event_count = event_count;
 
     IOHIDFluidTouchGestureData *fluid =
@@ -208,42 +216,58 @@ static CGEventRef augment_dock_swipe_event(CGEventRef event) {
     return result;
 }
 
-static CGEventRef make_augmented_dock_event(int phase, bool right) {
+static CGEventRef make_augmented_dock_event(int phase, int direction) {
+    bool vertical = direction == 2;
+    // Vertical up uses positive progress; do not reuse the reversed
+    // horizontal Space-switch convention for Mission Control.
+    bool negative = direction == 1;
     CGEventRef ev = CGEventCreate(NULL);
     if (!ev) return NULL;
 
+    mach_timebase_info_data_t timebase;
+    if (mach_timebase_info(&timebase) != KERN_SUCCESS || !timebase.denom) {
+        CFRelease(ev);
+        return NULL;
+    }
+    CGEventSetTimestamp(ev, (uint64_t)(((__uint128_t)mach_absolute_time() * timebase.numer) / timebase.denom));
     CGEventSetIntegerValueField(ev, kCGSEventTypeField, kCGSEventDockControl);
     CGEventSetIntegerValueField(ev, kCGEventGestureHIDType, kIOHIDEventTypeDockSwipe);
     CGEventSetIntegerValueField(ev, kCGEventGesturePhase, phase);
-    CGEventSetDoubleValueField(ev, kCGEventGestureSwipeProgress, right ? -1.0 : 1.0);
-    CGEventSetIntegerValueField(ev, kCGEventGestureSwipeMotion, kCGGestureMotionHorizontal);
+    // Captured native vertical IOHID payloads begin near +0.01 and advance.
+    // The CGEvent accessor reports the opposite sign on macOS 27.
+    double progress = vertical && phase == kGestureBegan ? 0.009765625 : (negative ? -1.0 : 1.0);
+    CGEventSetDoubleValueField(ev, kCGEventGestureSwipeProgress, progress);
+    CGEventSetIntegerValueField(ev, kCGEventGestureSwipeMotion, vertical ? kCGGestureMotionVertical : kCGGestureMotionHorizontal);
     CGEventSetIntegerValueField(ev, kCGEventGesturePhaseAlias, phase);
     CGEventSetDoubleValueField(ev, kCGEventGestureZoomDeltaY, 3.0);
     CGEventSetDoubleValueField(ev, kCGEventSourceProcessAlias,
                                (double)mach_absolute_time());
     CGEventSetDoubleValueField(ev, kCGEventGestureSwipePositionX, 0.1);
     if (phase == kGestureEnded) {
-        CGEventSetDoubleValueField(ev, kCGEventGestureSwipeVelocityX,
-                                   right ? -9999.0 : 9999.0);
+        double velocity = negative ? -9999.0 : 9999.0;
+        CGEventSetDoubleValueField(ev, kCGEventGestureSwipeVelocityX, velocity);
+        // Native vertical swipes carry identical X/Y velocity child fields.
+        if (vertical) CGEventSetDoubleValueField(ev, kCGEventGestureSwipeVelocityY, velocity);
     }
     return ev;
 }
 
 
-struct FSSequence { CGEventRef events[6]; int direction; };
+struct FSSequence { CGEventRef events[16]; int direction; int count; unsigned int phase_delay_us; };
 void FSReleaseSwipe(FSSequence *sequence) {
  if (!sequence) return;
- for (int i=0;i<6;i++) if(sequence->events[i]) CFRelease(sequence->events[i]);
+ for (int i=0;i<16;i++) if(sequence->events[i]) CFRelease(sequence->events[i]);
  free(sequence);
 }
 FSSequence *FSPrepareSwipe(int direction) {
- if (direction != -1 && direction != 1) return NULL;
+ if (direction != -1 && direction != 1 && direction != 2) return NULL;
  FSSequence *sequence = calloc(1, sizeof(FSSequence));
  if (!sequence) return NULL;
  sequence->direction = direction;
+ sequence->count = 6;
  const int phases[3] = {1,2,4};
  for (int i=0;i<3;i++) {
-  CGEventRef raw = make_augmented_dock_event(phases[i], direction == 1);
+  CGEventRef raw = make_augmented_dock_event(phases[i], direction);
   if (!raw) goto failed;
   sequence->events[i*2] = augment_dock_swipe_event(raw);
   CFRelease(raw);
@@ -260,11 +284,15 @@ failed:
  return NULL;
 }
 void FSPostSwipe(FSSequence *sequence) {
- if (!sequence || !FSCanSwitchSpace(sequence->direction)) return;
- for (int i=0;i<6;i++) CGEventPost(kCGSessionEventTap, sequence->events[i]);
+ // Mission Control does not require an adjacent Space, even on a single desktop.
+ if (!sequence || (sequence->direction != 2 && !FSCanSwitchSpace(sequence->direction))) return;
+ for (int i=0;i<sequence->count;i++) {
+  if (i > 0 && i % 2 == 0 && sequence->phase_delay_us) usleep(sequence->phase_delay_us);
+  CGEventPost(kCGSessionEventTap, sequence->events[i]);
+ }
 }
 CGEventRef FSCopySequenceEvent(FSSequence *sequence, int index) {
- if (!sequence || index < 0 || index >= 6) return NULL;
+ if (!sequence || index < 0 || index >= sequence->count) return NULL;
  return CGEventCreateCopy(sequence->events[index]);
 }
 
@@ -328,4 +356,36 @@ bool FSCanSwitchSpace(int direction) {
  if (spaces) CFRelease(spaces);
  if (display) CFRelease(display);
  return allowed;
+}
+
+FSSequence *FSPrepareMissionControl(void) {
+ FSSequence *sequence = calloc(1, sizeof(FSSequence));
+ if (!sequence) return NULL;
+ sequence->direction = 2;
+ sequence->count = 16;
+ sequence->phase_delay_us = 4000;
+ double previous = 0.0;
+ for (int step = 0; step < 8; step++) {
+  int phase = step == 0 ? kGestureBegan : (step == 7 ? kGestureEnded : kGestureChanged);
+  double t = (step + 1) / 8.0;
+  double progress = t * t * (3.0 - 2.0 * t);
+  CGEventRef raw = make_augmented_dock_event(phase, 2);
+  if (!raw) goto failed;
+  CGEventSetDoubleValueField(raw, kCGEventGestureSwipeProgress, progress);
+  CGEventSetDoubleValueField(raw, kCGEventGestureSwipePositionX, 0.0);
+  CGEventSetDoubleValueField(raw, kCGEventGestureSwipePositionY, -(progress - previous));
+  CGEventSetIntegerValueField(raw, (CGEventField)136, 1);
+  sequence->events[step * 2] = augment_dock_swipe_event(raw);
+  CFRelease(raw);
+  if (!sequence->events[step * 2]) goto failed;
+  CGEventRef companion = CGEventCreate(NULL);
+  if (!companion) goto failed;
+  CGEventSetIntegerValueField(companion, kCGSEventTypeField, kCGSEventGesture);
+  sequence->events[step * 2 + 1] = companion;
+  previous = progress;
+ }
+ return sequence;
+failed:
+ FSReleaseSwipe(sequence);
+ return NULL;
 }
