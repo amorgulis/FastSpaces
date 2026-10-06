@@ -17,7 +17,7 @@ import FastSpacesCore
   check(up.handle(key(126, flags: [.control, modifier]), ready: true) == .passThrough, "modified up passes through")
  }
  check(up.handle(key(126), ready: false) == .passThrough, "unready up passes through")
- check(up.handle(key(125), ready: true) == .passThrough, "Control down remains native")
+ check(up.handle(key(125), ready: true) == .switchSpace(.appExpose), "Control down opens fast App Expose")
  var state = ShortcutState()
  check(state.handle(key(), ready: true) == .switchSpace(.previous), "Control left switches previous")
  check(state.hasConsumedKeys, "tracks swallowed down")

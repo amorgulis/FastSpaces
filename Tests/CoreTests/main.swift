@@ -75,6 +75,24 @@ if let dismissal = FSPrepareMissionControlDismissal() {
  }
  check(FSCopySequenceEvent(dismissal, 2) == nil, "dismissal event bounds")
 } else { check(false, "dismissal prepares") }
+if let expose = FSPrepareAppExpose() {
+ defer { FSReleaseSwipe(expose) }
+ var previous = 0.0
+ for index: Int32 in stride(from: 0, to: 16, by: 2) {
+  guard let event = FSCopySequenceEvent(expose, index)?.takeRetainedValue() else { check(false, "App Expose complete sequence"); continue }
+  let progress = event.getDoubleValueField(CGEventField(rawValue: 124)!)
+  check(progress < previous && progress >= -1, "App Expose progresses downward")
+  previous = progress
+  check(event.getIntegerValueField(CGEventField(rawValue: 123)!) == 2, "App Expose vertical axis")
+  if index == 14 {
+   check(event.getDoubleValueField(CGEventField(rawValue: 129)!) == -9999, "App Expose negative terminal X velocity")
+   check(event.getDoubleValueField(CGEventField(rawValue: 130)!) == -9999, "App Expose negative terminal Y velocity")
+  }
+ }
+ check(previous == -1, "App Expose reaches full downward progress")
+} else { check(false, "App Expose prepares") }
+check(FSIsOverviewSnapshot([["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 18], ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20]] as CFArray), "App Expose overview detected for dismissal")
+check(!FSIsOverviewSnapshot([] as CFArray), "desktop not an overview")
 let missionWindows = [
  ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 18],
  ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20],

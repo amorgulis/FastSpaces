@@ -87,8 +87,8 @@ import GestureBridge
   let input = KeyInput(code: code, isDown: type == .keyDown, modifiers: Modifiers(rawValue: event.flags.rawValue), isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
   let verticalPress = input.isDown && !input.isRepeat && (code == 125 || code == 126)
    && input.modifiers.contains(.control) && input.modifiers.intersection([.command, .option, .shift]).isEmpty
-  let missionControlActive = accepting && verticalPress && FSIsMissionControlActive()
-  let decision = state.handle(input, ready: accepting && (code == 123 || code == 124 || code == 125 || (code == 126 && !CommandLine.arguments.contains("--trace-native-gestures"))) && ready(), missionControlActive: missionControlActive)
+  let missionControlActive = accepting && verticalPress && FSIsOverviewActive()
+  let decision = state.handle(input, ready: accepting && (code == 123 || code == 124 || (code == 125 || code == 126) && !CommandLine.arguments.contains("--trace-native-gestures")) && ready(), missionControlActive: missionControlActive)
   if code == 125 || code == 126 {
    trace("vertical code=\(code) active=\(missionControlActive) down=\(input.isDown) repeat=\(input.isRepeat) accepting=\(accepting) flags=\(input.modifiers.rawValue) decision=\(decision)")
   }

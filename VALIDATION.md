@@ -118,3 +118,17 @@ These are not represented as passing by unit tests or code review. The user can 
 - Added the observed layer20-only pattern to detection, retaining the existing multi-layer pattern and App Exposé exclusion fixture. The new regression failed before the correction. The user confirmed both dismissal shortcuts work.
 
 - User confirmed state-aware Control–Up/Down dismissal works on the target Mac after the layer20-only detector correction.
+
+## Fast Control–Down / App Exposé
+
+- Control–Down now constructs the same eight-phase, 4 ms-spaced generated vertical gesture as Control–Up, with reversed progress/displacement and negative terminal X/Y velocities. No captures are required.
+- Dismissal detection includes App Exposé as well as Mission Control (Dock layer20 present), with state rechecked before posting Escape. Both vertical shortcuts dismiss either overview; native Escape continues to pass through. This supersedes earlier statements that Control–Down remains native outside Mission Control.
+- New shortcut, generated-event and overview-detection checks failed before implementation. The user confirmed fast App Exposé opening and dismissal work.
+
+### App Exposé native capture
+
+- Initial downward gesture capture was empty and the user reported the trackpad gesture did not open App Exposé. After enabling/retrying the native gesture and restarting capture, the user confirmed native trackpad and Control–Down openings work.
+- Successful native App Exposé capture has negative raw IOHID progress (began -1001/65536, ended -18308/65536) and positive vertical displacement, matching the generated downward sequence. CGEvent accessor signs are opposite to raw payload signs.
+- No direction correction was justified by this capture. Restarted the existing accelerated implementation in normal mode for live verification with the trackpad gesture enabled.
+
+- User confirmed the integrated fast Control–Down/App Exposé behavior works after enabling the native trackpad gesture. Both vertical shortcuts and Escape dismiss the overview.

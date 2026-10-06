@@ -286,7 +286,7 @@ failed:
 void FSPostSwipe(FSSequence *sequence) {
  // Mission Control does not require an adjacent Space, even on a single desktop.
  if (!sequence) return;
- if (sequence->direction == 3 && !FSIsMissionControlActive()) return;
+ if (sequence->direction == 3 && !FSIsOverviewActive()) return;
  if ((sequence->direction == -1 || sequence->direction == 1) && !FSCanSwitchSpace(sequence->direction)) return;
  for (int i=0;i<sequence->count;i++) {
   if (i > 0 && i % 2 == 0 && sequence->phase_delay_us) usleep(sequence->phase_delay_us);
@@ -360,23 +360,27 @@ bool FSCanSwitchSpace(int direction) {
  return allowed;
 }
 
-FSSequence *FSPrepareMissionControl(void) {
+static FSSequence *prepare_vertical_overview(bool downward) {
  FSSequence *sequence = calloc(1, sizeof(FSSequence));
  if (!sequence) return NULL;
- sequence->direction = 2;
+ sequence->direction = downward ? 4 : 2;
  sequence->count = 16;
  sequence->phase_delay_us = 4000;
  double previous = 0.0;
  for (int step = 0; step < 8; step++) {
   int phase = step == 0 ? kGestureBegan : (step == 7 ? kGestureEnded : kGestureChanged);
   double t = (step + 1) / 8.0;
-  double progress = t * t * (3.0 - 2.0 * t);
+  double progress = (downward ? -1.0 : 1.0) * t * t * (3.0 - 2.0 * t);
   CGEventRef raw = make_augmented_dock_event(phase, 2);
   if (!raw) goto failed;
   CGEventSetDoubleValueField(raw, kCGEventGestureSwipeProgress, progress);
   CGEventSetDoubleValueField(raw, kCGEventGestureSwipePositionX, 0.0);
   CGEventSetDoubleValueField(raw, kCGEventGestureSwipePositionY, -(progress - previous));
   CGEventSetIntegerValueField(raw, (CGEventField)136, 1);
+  if (phase == kGestureEnded && downward) {
+   CGEventSetDoubleValueField(raw, kCGEventGestureSwipeVelocityX, -9999.0);
+   CGEventSetDoubleValueField(raw, kCGEventGestureSwipeVelocityY, -9999.0);
+  }
   sequence->events[step * 2] = augment_dock_swipe_event(raw);
   CFRelease(raw);
   if (!sequence->events[step * 2]) goto failed;
@@ -392,8 +396,11 @@ failed:
  return NULL;
 }
 
+FSSequence *FSPrepareMissionControl(void) { return prepare_vertical_overview(false); }
+FSSequence *FSPrepareAppExpose(void) { return prepare_vertical_overview(true); }
+
 // Empirical Dock overlay pattern; unknown/unavailable state is false.
-bool FSIsMissionControlSnapshot(CFArrayRef windows) {
+static bool is_overview_snapshot(CFArrayRef windows, bool include_expose) {
  if (!windows || CFGetTypeID(windows) != CFArrayGetTypeID()) return false;
  int layer18 = 0, layer20 = 0;
  for (CFIndex i = 0; i < CFArrayGetCount(windows); i++) {
@@ -407,16 +414,20 @@ bool FSIsMissionControlSnapshot(CFArrayRef windows) {
   if (layer == 20) layer20++;
  }
  // macOS 27 live trace: Mission Control presents a lone layer-20 window.
- bool active = layer20 > 0 && (layer18 == 0 || layer20 > layer18);
+ bool active = layer20 > 0 && (include_expose || layer18 == 0 || layer20 > layer18);
  if (getenv("FASTSPACES_TRACE")) fprintf(stderr, "Mission Control detection: Dock layer18=%d layer20=%d active=%d\n", layer18, layer20, active);
  return active;
 }
-bool FSIsMissionControlActive(void) {
+bool FSIsMissionControlSnapshot(CFArrayRef windows) { return is_overview_snapshot(windows, false); }
+bool FSIsOverviewSnapshot(CFArrayRef windows) { return is_overview_snapshot(windows, true); }
+static bool is_overview_active(bool include_expose) {
  CFArrayRef windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
- bool active = FSIsMissionControlSnapshot(windows);
+ bool active = is_overview_snapshot(windows, include_expose);
  if (windows) CFRelease(windows);
  return active;
 }
+bool FSIsMissionControlActive(void) { return is_overview_active(false); }
+bool FSIsOverviewActive(void) { return is_overview_active(true); }
 FSSequence *FSPrepareMissionControlDismissal(void) {
  FSSequence *sequence = calloc(1, sizeof(FSSequence));
  if (!sequence) return NULL;

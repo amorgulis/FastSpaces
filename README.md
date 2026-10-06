@@ -7,8 +7,8 @@ A native macOS 27 menu bar utility for fast adjacent-Space switching with **Cont
 1. Quit Fast Spaces Probe if it is open.
 2. Open `../Fast Spaces.app`. Look for the left/right arrow icon in the menu bar; the app has no Dock icon.
 3. Click the icon → **Open Accessibility Settings…**. Enable **Fast Spaces** in System Settings → Privacy & Security → Accessibility. This is a separate app from the probe, so it needs its own permission. If absent, use + to add Fast Spaces.app.
-4. The menu changes to **Active — Control ← / → / ↑** after permission is detected, usually within two seconds. If macOS still reports missing access, quit and reopen the app.
-5. Use Control–Left/Right to switch Spaces, or Control–Up to open Mission Control. While Mission Control is open, either Control–Up or Control–Down dismisses it. Control–Down retains its native behavior outside Mission Control. Each press switches once; holding the key does not repeat. Switching targets the display under the pointer. Outward presses at the first or last Space are consumed without posting a gesture.
+4. The menu changes to **Active — Control ← / → / ↑ / ↓** after permission is detected, usually within two seconds. If macOS still reports missing access, quit and reopen the app.
+5. Use Control–Left/Right to switch Spaces, or Control–Up to open Mission Control. While Mission Control is open, either Control–Up or Control–Down dismisses it. Control–Down opens App Exposé quickly. While either overview is open, Control–Up, Control–Down, or Escape dismisses it. Each press switches once; holding the key does not repeat. Switching targets the display under the pointer. Outward presses at the first or last Space are consumed without posting a gesture.
 
 **Enable Fast Switching** pauses/resumes the shortcut replacement and persists across launches. When disabled or missing permission, the normal macOS shortcuts pass through. **Quit Fast Spaces** removes the keyboard tap. Other modifier combinations and actual trackpad gestures are left alone.
 
@@ -48,3 +48,5 @@ Space boundary diagnostic (read-only, no gestures):
 ```
 
 The bridge reads the current ordered Space list immediately before each queued swipe is posted, including full-screen Spaces. If the display or Space topology cannot be read, it suppresses the swipe. These read-only SkyLight APIs are undocumented and resolved dynamically.
+
+For fast Control–Down, enable **App Exposé** in System Settings → Trackpad → More Gestures (choose a downward swipe). The generated gesture was ignored when that native gesture was disabled on the tested Mac. Fast Control–Down and overview dismissal were confirmed by the user after enabling it.

@@ -17,3 +17,7 @@ FSSequence *FSPrepareMissionControl(void);
 bool FSIsMissionControlSnapshot(CFArrayRef windows);
 bool FSIsMissionControlActive(void);
 FSSequence *FSPrepareMissionControlDismissal(void);
+
+FSSequence *FSPrepareAppExpose(void);
+bool FSIsOverviewSnapshot(CFArrayRef windows);
+bool FSIsOverviewActive(void);
