@@ -35,3 +35,10 @@ One fresh read-only reviewer identified three important defects (held-key re-ena
 - Real held-key and alternating-key input, permission revocation, timeout recovery, sleep/session recovery, quit and re-enable behavior.
 
 These are not represented as passing by unit tests or code review. The user can perform them after granting final-app access; unavailable display hardware should be recorded as unverified.
+
+## Boundary guard update
+
+- Added regression checks for first/last Space, middle Space, single Space, separate display selection, missing display/current Space, and invalid direction. The unguarded implementation failed nine assertions; the guarded implementation passes all 90 checks.
+- Release bundle rebuilt at `dist/Fast Spaces.app`; ad-hoc signature verification passed. Existing command-line-tools cache/search-path warnings remain.
+- Every gesture job checks fresh topology at posting time, so queued jobs do not capture an old boundary result. The keyboard still consumes a press whose swipe is suppressed. This does not wait for Dock animation completion.
+- Live read-only Space query could not be verified: the sandbox denied WindowServer access (process exit 134), and the user declined the outside-sandbox retry. Live first/last Space and rapid queued-key behavior remain unverified.

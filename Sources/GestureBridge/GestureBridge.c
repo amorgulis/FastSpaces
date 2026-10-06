@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
+#include <dlfcn.h>
+#include <dispatch/dispatch.h>
 
 // These are private CGEvent fields used by the WindowServer and Dock for
 // trackpad gesture routing. They were discovered via reverse engineering.
@@ -228,7 +230,7 @@ static CGEventRef make_augmented_dock_event(int phase, bool right) {
 }
 
 
-struct FSSequence { CGEventRef events[6]; };
+struct FSSequence { CGEventRef events[6]; int direction; };
 void FSReleaseSwipe(FSSequence *sequence) {
  if (!sequence) return;
  for (int i=0;i<6;i++) if(sequence->events[i]) CFRelease(sequence->events[i]);
@@ -238,6 +240,7 @@ FSSequence *FSPrepareSwipe(int direction) {
  if (direction != -1 && direction != 1) return NULL;
  FSSequence *sequence = calloc(1, sizeof(FSSequence));
  if (!sequence) return NULL;
+ sequence->direction = direction;
  const int phases[3] = {1,2,4};
  for (int i=0;i<3;i++) {
   CGEventRef raw = make_augmented_dock_event(phases[i], direction == 1);
@@ -257,10 +260,72 @@ failed:
  return NULL;
 }
 void FSPostSwipe(FSSequence *sequence) {
- if (!sequence) return;
+ if (!sequence || !FSCanSwitchSpace(sequence->direction)) return;
  for (int i=0;i<6;i++) CGEventPost(kCGSessionEventTap, sequence->events[i]);
 }
 CGEventRef FSCopySequenceEvent(FSSequence *sequence, int index) {
  if (!sequence || index < 0 || index >= 6) return NULL;
  return CGEventCreateCopy(sequence->events[index]);
+}
+
+static CFTypeRef dictionary_value(CFTypeRef object, CFStringRef key) {
+ if (!object || CFGetTypeID(object) != CFDictionaryGetTypeID()) return NULL;
+ return CFDictionaryGetValue((CFDictionaryRef)object, key);
+}
+static uint64_t space_id(CFTypeRef object) {
+ CFTypeRef number = dictionary_value(object, CFSTR("id64"));
+ int64_t value = 0;
+ if (!number || CFGetTypeID(number) != CFNumberGetTypeID()
+     || !CFNumberGetValue(number, kCFNumberSInt64Type, &value)) return 0;
+ return (uint64_t)value;
+}
+bool FSCanNavigateSnapshot(CFArrayRef displays, CFStringRef display, int direction) {
+ if (!displays || !display || (direction != -1 && direction != 1)
+     || CFGetTypeID(displays) != CFArrayGetTypeID()) return false;
+ for (CFIndex i = 0; i < CFArrayGetCount(displays); i++) {
+  CFTypeRef entry = CFArrayGetValueAtIndex(displays, i);
+  CFTypeRef identifier = dictionary_value(entry, CFSTR("Display Identifier"));
+  if (!identifier || !CFEqual(identifier, display)) continue;
+  uint64_t current = space_id(dictionary_value(entry, CFSTR("Current Space")));
+  CFArrayRef spaces = dictionary_value(entry, CFSTR("Spaces"));
+  if (!current || !spaces || CFGetTypeID(spaces) != CFArrayGetTypeID()) return false;
+  CFIndex count = CFArrayGetCount(spaces);
+  for (CFIndex j = 0; j < count; j++) {
+   if (space_id(CFArrayGetValueAtIndex(spaces, j)) != current) continue;
+   CFIndex target = j + direction;
+   return target >= 0 && target < count
+       && space_id(CFArrayGetValueAtIndex(spaces, target)) != 0;
+  }
+  return false;
+ }
+ return false;
+}
+
+// Read-only SkyLight functions, resolved dynamically so missing symbols cannot
+// prevent app startup. Never inject a swipe when its destination is unknown.
+static int (*main_connection)(void);
+static CFArrayRef (*copy_display_spaces)(int);
+static CFStringRef (*copy_display_for_point)(int, CGPoint);
+static dispatch_once_t space_api_once;
+static void load_space_api(void *unused) {
+ void *library = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY | RTLD_LOCAL);
+ if (!library) return;
+ main_connection = dlsym(library, "SLSMainConnectionID");
+ copy_display_spaces = dlsym(library, "SLSCopyManagedDisplaySpaces");
+ copy_display_for_point = dlsym(library, "SLSCopyBestManagedDisplayForPoint");
+}
+bool FSCanSwitchSpace(int direction) {
+ dispatch_once_f(&space_api_once, NULL, load_space_api);
+ if (!main_connection || !copy_display_spaces || !copy_display_for_point) return false;
+ CGEventRef cursor = CGEventCreate(NULL);
+ if (!cursor) return false;
+ CGPoint point = CGEventGetLocation(cursor);
+ CFRelease(cursor);
+ int connection = main_connection();
+ CFStringRef display = copy_display_for_point(connection, point);
+ CFArrayRef spaces = copy_display_spaces(connection);
+ bool allowed = FSCanNavigateSnapshot(spaces, display, direction);
+ if (spaces) CFRelease(spaces);
+ if (display) CFRelease(display);
+ return allowed;
 }

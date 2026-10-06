@@ -23,6 +23,24 @@ for direction: Int32 in [-1, 1] {
  }
  check(FSCopySequenceEvent(sequence, 6) == nil, "event bounds")
 }
+let topology = [
+ ["Display Identifier": "A", "Current Space": ["id64": 10], "Spaces": [["id64": 10], ["id64": 20], ["id64": 30]]],
+ ["Display Identifier": "B", "Current Space": ["id64": 30], "Spaces": [["id64": 10], ["id64": 20], ["id64": 30]]],
+ ["Display Identifier": "C", "Current Space": ["id64": 20], "Spaces": [["id64": 10], ["id64": 20], ["id64": 30]]],
+ ["Display Identifier": "single", "Current Space": ["id64": 40], "Spaces": [["id64": 40]]],
+ ["Display Identifier": "stale", "Current Space": ["id64": 99], "Spaces": [["id64": 40]]]
+] as CFArray
+check(!FSCanNavigateSnapshot(topology, "A" as CFString, -1), "first Space suppresses left")
+check(FSCanNavigateSnapshot(topology, "A" as CFString, 1), "first Space allows right")
+check(!FSCanNavigateSnapshot(topology, "B" as CFString, 1), "last Space suppresses right")
+check(FSCanNavigateSnapshot(topology, "B" as CFString, -1), "last Space allows left")
+for direction: Int32 in [-1, 1] {
+ check(FSCanNavigateSnapshot(topology, "C" as CFString, direction), "middle Space allows either direction")
+ check(!FSCanNavigateSnapshot(topology, "single" as CFString, direction), "single Space suppresses either direction")
+ check(!FSCanNavigateSnapshot(topology, "stale" as CFString, direction), "unknown current Space suppresses swipe")
+ check(!FSCanNavigateSnapshot(topology, "missing" as CFString, direction), "unknown display suppresses swipe")
+}
+check(!FSCanNavigateSnapshot(topology, "C" as CFString, 0), "boundary query rejects invalid direction")
 runShortcutTests()
 runCoordinatorTests()
 runLifecycleTests()

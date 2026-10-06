@@ -1,4 +1,10 @@
 import AppKit
+import GestureBridge
+if CommandLine.arguments.contains("--diagnose-spaces") {
+ print("Adjacent Space left: \(FSCanSwitchSpace(-1))")
+ print("Adjacent Space right: \(FSCanSwitchSpace(1))")
+ exit(0)
+}
 if CommandLine.arguments.contains("--diagnose") {
  let trusted = AXIsProcessTrusted()
  print("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
