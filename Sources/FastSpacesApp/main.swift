@@ -1,5 +1,6 @@
 import AppKit
 import GestureBridge
+if CommandLine.arguments.contains("--trace-shortcuts") { setenv("FASTSPACES_TRACE", "1", 1) }
 if CommandLine.arguments.contains("--diagnose-spaces") {
  print("Adjacent Space left: \(FSCanSwitchSpace(-1))")
  print("Adjacent Space right: \(FSCanSwitchSpace(1))")

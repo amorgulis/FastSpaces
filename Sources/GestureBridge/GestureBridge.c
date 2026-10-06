@@ -285,7 +285,9 @@ failed:
 }
 void FSPostSwipe(FSSequence *sequence) {
  // Mission Control does not require an adjacent Space, even on a single desktop.
- if (!sequence || (sequence->direction != 2 && !FSCanSwitchSpace(sequence->direction))) return;
+ if (!sequence) return;
+ if (sequence->direction == 3 && !FSIsMissionControlActive()) return;
+ if ((sequence->direction == -1 || sequence->direction == 1) && !FSCanSwitchSpace(sequence->direction)) return;
  for (int i=0;i<sequence->count;i++) {
   if (i > 0 && i % 2 == 0 && sequence->phase_delay_us) usleep(sequence->phase_delay_us);
   CGEventPost(kCGSessionEventTap, sequence->events[i]);
@@ -388,4 +390,43 @@ FSSequence *FSPrepareMissionControl(void) {
 failed:
  FSReleaseSwipe(sequence);
  return NULL;
+}
+
+// Empirical Dock overlay pattern; unknown/unavailable state is false.
+bool FSIsMissionControlSnapshot(CFArrayRef windows) {
+ if (!windows || CFGetTypeID(windows) != CFArrayGetTypeID()) return false;
+ int layer18 = 0, layer20 = 0;
+ for (CFIndex i = 0; i < CFArrayGetCount(windows); i++) {
+  CFTypeRef entry = CFArrayGetValueAtIndex(windows, i);
+  CFTypeRef owner = dictionary_value(entry, kCGWindowOwnerName);
+  if (!owner || !CFEqual(owner, CFSTR("Dock"))) continue;
+  CFTypeRef number = dictionary_value(entry, kCGWindowLayer);
+  int layer = 0;
+  if (!number || CFGetTypeID(number) != CFNumberGetTypeID() || !CFNumberGetValue(number, kCFNumberIntType, &layer)) continue;
+  if (layer == 18) layer18++;
+  if (layer == 20) layer20++;
+ }
+ // macOS 27 live trace: Mission Control presents a lone layer-20 window.
+ bool active = layer20 > 0 && (layer18 == 0 || layer20 > layer18);
+ if (getenv("FASTSPACES_TRACE")) fprintf(stderr, "Mission Control detection: Dock layer18=%d layer20=%d active=%d\n", layer18, layer20, active);
+ return active;
+}
+bool FSIsMissionControlActive(void) {
+ CFArrayRef windows = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+ bool active = FSIsMissionControlSnapshot(windows);
+ if (windows) CFRelease(windows);
+ return active;
+}
+FSSequence *FSPrepareMissionControlDismissal(void) {
+ FSSequence *sequence = calloc(1, sizeof(FSSequence));
+ if (!sequence) return NULL;
+ sequence->direction = 3;
+ sequence->count = 2;
+ for (int i = 0; i < 2; i++) {
+  sequence->events[i] = CGEventCreateKeyboardEvent(NULL, 53, i == 0);
+  if (!sequence->events[i]) { FSReleaseSwipe(sequence); return NULL; }
+  CGEventSetFlags(sequence->events[i], 0);
+  CGEventSetIntegerValueField(sequence->events[i], kCGEventSourceUserData, 0x46535043);
+ }
+ return sequence;
 }

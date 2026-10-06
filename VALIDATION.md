@@ -105,3 +105,16 @@ These are not represented as passing by unit tests or code review. The user can 
 - User confirmed the generated quarter-timing probe stays fast and consistent. Control–Up now uses that same `FSPrepareMissionControl` / `FSPostSwipe` sequence on the existing serial injection queue.
 - Removed bundled native captures, capture copying from the build script, and the temporary replay probe. The generated sequence does not require local calibration or device sender metadata. Earlier capture/replay sections above document investigation history.
 - The user confirmed the final integrated capture-free Control–Up shortcut works well.
+
+## State-aware Mission Control dismissal
+
+- Control–Up and Control–Down request an unmodified Escape pair when Mission Control is detected; Control–Down passes through outside that state. Held presses and releases follow the existing suppression rules.
+- Uses an empirical read-only Dock window-layer heuristic (layer 18 present, layer 20 count greater than layer 18), checking on vertical shortcut presses and again immediately before posting dismissal. No retained open/closed toggle is used. Detection can vary with OS/window configuration; live confirmation is pending.
+- Matching/detection assertions failed before implementation. Tests also inspect actual Escape event types, key codes, empty modifier flags and bounds.
+
+### macOS 27 dismissal detection correction
+
+- Live trace showed desktop Dock layer18=0/layer20=0 and open Mission Control layer18=0/layer20=1. The earlier layer18 requirement caused Control–Up to request another opening gesture. Control–Down was passing through, so its apparent dismissal did not prove interception worked.
+- Added the observed layer20-only pattern to detection, retaining the existing multi-layer pattern and App Exposé exclusion fixture. The new regression failed before the correction. The user confirmed both dismissal shortcuts work.
+
+- User confirmed state-aware Control–Up/Down dismissal works on the target Mac after the layer20-only detector correction.

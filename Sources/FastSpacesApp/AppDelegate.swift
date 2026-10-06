@@ -6,7 +6,12 @@ import GestureBridge
 final class PreparedSwipe: @unchecked Sendable {
  private let sequence: OpaquePointer
  init?(_ direction: Direction) {
-  let prepared = direction == .missionControl ? FSPrepareMissionControl() : FSPrepareSwipe(direction.rawValue)
+  let prepared: OpaquePointer?
+  switch direction {
+  case .missionControl: prepared = FSPrepareMissionControl()
+  case .dismissMissionControl: prepared = FSPrepareMissionControlDismissal()
+  case .previous, .next: prepared = FSPrepareSwipe(direction.rawValue)
+  }
   guard let sequence = prepared else { return nil }
   self.sequence = sequence
  }
@@ -119,7 +124,7 @@ final class PreparedSwipe: @unchecked Sendable {
  @objc private func showHelp() {
   let alert = NSAlert()
   alert.messageText = "Fast Spaces"
-  alert.informativeText = "Control–Left/Right switches to an adjacent Space using a high-velocity gesture. Control–Up opens Mission Control using a fast vertical gesture. Switching targets the display under your pointer. Each press switches once; holding a key does not repeat. Other shortcuts and real trackpad gestures pass through. Uses the gesture pathway you verified on macOS 27."
+  alert.informativeText = "Control–Left/Right switches to an adjacent Space using a high-velocity gesture. Control–Up opens Mission Control using a fast vertical gesture. While Mission Control is open, Control–Up or Control–Down dismisses it. Switching targets the display under your pointer. Each press switches once; holding a key does not repeat. Other shortcuts and real trackpad gestures pass through. Uses the gesture pathway you verified on macOS 27."
   alert.addButton(withTitle: "OK")
   NSApp.activate(ignoringOtherApps: true); alert.runModal()
  }

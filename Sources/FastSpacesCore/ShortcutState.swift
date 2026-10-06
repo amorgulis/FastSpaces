@@ -1,4 +1,4 @@
-public enum Direction: Int32, Sendable { case previous = -1, next = 1, missionControl = 2 }
+public enum Direction: Int32, Sendable { case previous = -1, next = 1, missionControl = 2, dismissMissionControl = 3 }
 public struct Modifiers: OptionSet, Sendable {
  public let rawValue: UInt64
  public init(rawValue: UInt64) { self.rawValue = rawValue }
@@ -23,11 +23,15 @@ public struct ShortcutState {
  private var consumed: Set<UInt16> = []
  public init() {}
  public var hasConsumedKeys: Bool { !consumed.isEmpty }
- public mutating func handle(_ input: KeyInput, ready: Bool) -> KeyDecision {
+ public mutating func handle(_ input: KeyInput, ready: Bool, missionControlActive: Bool = false) -> KeyDecision {
   if !input.isDown { return consumed.remove(input.code) != nil ? .consume : .passThrough }
   if consumed.contains(input.code) { return .consume }
   guard ready, !input.isRepeat, input.modifiers.contains(.control), input.modifiers.intersection([.command, .option, .shift]).isEmpty else { return .passThrough }
   let direction: Direction
+  if missionControlActive && (input.code == 125 || input.code == 126) {
+   consumed.insert(input.code)
+   return .switchSpace(.dismissMissionControl)
+  }
   switch input.code { case 123: direction = .previous; case 124: direction = .next; case 126: direction = .missionControl; default: return .passThrough }
   consumed.insert(input.code)
   return .switchSpace(direction)

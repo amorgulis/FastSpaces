@@ -65,6 +65,26 @@ if let generated = FSPrepareMissionControl() {
  check(lastProgress == 1, "generated gesture reaches full progress")
  check(FSCopySequenceEvent(generated, 16) == nil, "generated bounds")
 } else { check(false, "generated Mission Control prepares") }
+if let dismissal = FSPrepareMissionControlDismissal() {
+ defer { FSReleaseSwipe(dismissal) }
+ for index: Int32 in 0..<2 {
+  guard let event = FSCopySequenceEvent(dismissal, index)?.takeRetainedValue() else { check(false, "dismissal complete"); continue }
+  check(event.type == (index == 0 ? .keyDown : .keyUp), "dismissal Escape down/up pair")
+  check(event.getIntegerValueField(.keyboardEventKeycode) == 53, "dismissal uses Escape")
+  check(event.flags.isEmpty, "dismissal strips Control modifier")
+ }
+ check(FSCopySequenceEvent(dismissal, 2) == nil, "dismissal event bounds")
+} else { check(false, "dismissal prepares") }
+let missionWindows = [
+ ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 18],
+ ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20],
+ ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20]
+] as CFArray
+check(FSIsMissionControlSnapshot([["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20]] as CFArray), "macOS 27 Mission Control single layer20 detected")
+check(FSIsMissionControlSnapshot(missionWindows), "Mission Control window pattern detected")
+check(!FSIsMissionControlSnapshot([] as CFArray), "desktop not detected as Mission Control")
+check(!FSIsMissionControlSnapshot([["kCGWindowOwnerName": "Other", "kCGWindowLayer": 18]] as CFArray), "other app overlay excluded")
+check(!FSIsMissionControlSnapshot([["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 18], ["kCGWindowOwnerName": "Dock", "kCGWindowLayer": 20]] as CFArray), "App Expose pattern excluded")
 let topology = [
  ["Display Identifier": "A", "Current Space": ["id64": 10], "Spaces": [["id64": 10], ["id64": 20], ["id64": 30]]],
  ["Display Identifier": "B", "Current Space": ["id64": 30], "Spaces": [["id64": 10], ["id64": 20], ["id64": 30]]],

@@ -3,6 +3,12 @@ import FastSpacesCore
  func key(_ code: UInt16 = 123, down: Bool = true, flags: Modifiers = .control, repeatKey: Bool = false) -> KeyInput {
   KeyInput(code: code, isDown: down, modifiers: flags, isRepeat: repeatKey)
  }
+ for code: UInt16 in [125, 126] {
+  var dismissal = ShortcutState()
+  check(dismissal.handle(key(code), ready: true, missionControlActive: true) == .switchSpace(.dismissMissionControl), "vertical shortcut dismisses active Mission Control")
+  check(dismissal.handle(key(code, repeatKey: true), ready: true, missionControlActive: true) == .consume, "dismissal held key suppressed")
+  check(dismissal.handle(key(code, down: false), ready: false) == .consume, "dismissal release paired")
+ }
  var up = ShortcutState()
  check(up.handle(key(126), ready: true) == .switchSpace(.missionControl), "Control up accepts Mission Control")
  check(up.handle(key(126, repeatKey: true), ready: true) == .consume, "held up does not repeat")

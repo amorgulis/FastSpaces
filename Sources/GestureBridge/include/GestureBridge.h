@@ -13,3 +13,7 @@ bool FSCanSwitchSpace(int direction);
 
 // Capture-free eight-phase vertical gesture with 4 ms phase spacing.
 FSSequence *FSPrepareMissionControl(void);
+
+bool FSIsMissionControlSnapshot(CFArrayRef windows);
+bool FSIsMissionControlActive(void);
+FSSequence *FSPrepareMissionControlDismissal(void);

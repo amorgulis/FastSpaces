@@ -1,5 +1,6 @@
 import AppKit
 import FastSpacesCore
+import GestureBridge
 
 /// The run-loop source lives exclusively on the main run loop.
 @MainActor final class KeyboardTap: TapDriver {
@@ -84,9 +85,12 @@ import FastSpacesCore
   guard type == .keyDown || type == .keyUp else { return Unmanaged.passUnretained(event) }
   let code = UInt16(truncatingIfNeeded: event.getIntegerValueField(.keyboardEventKeycode))
   let input = KeyInput(code: code, isDown: type == .keyDown, modifiers: Modifiers(rawValue: event.flags.rawValue), isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
-  let decision = state.handle(input, ready: accepting && (code == 123 || code == 124 || (code == 126 && !CommandLine.arguments.contains("--trace-native-gestures"))) && ready())
-  if code == 126 {
-   trace("up down=\(input.isDown) repeat=\(input.isRepeat) accepting=\(accepting) flags=\(input.modifiers.rawValue) decision=\(decision)")
+  let verticalPress = input.isDown && !input.isRepeat && (code == 125 || code == 126)
+   && input.modifiers.contains(.control) && input.modifiers.intersection([.command, .option, .shift]).isEmpty
+  let missionControlActive = accepting && verticalPress && FSIsMissionControlActive()
+  let decision = state.handle(input, ready: accepting && (code == 123 || code == 124 || code == 125 || (code == 126 && !CommandLine.arguments.contains("--trace-native-gestures"))) && ready(), missionControlActive: missionControlActive)
+  if code == 125 || code == 126 {
+   trace("vertical code=\(code) active=\(missionControlActive) down=\(input.isDown) repeat=\(input.isRepeat) accepting=\(accepting) flags=\(input.modifiers.rawValue) decision=\(decision)")
   }
   switch decision {
   case .passThrough: return Unmanaged.passUnretained(event)
@@ -101,7 +105,7 @@ import FastSpacesCore
    return nil
   case .switchSpace(let direction):
    let accepted = switchSpace(direction)
-   if code == 126 { trace("Mission Control injection accepted=\(accepted)") }
+   if code == 125 || code == 126 { trace("Mission Control injection accepted=\(accepted)") }
    if accepted { return nil }
    state.discardConsumedPress(code: code)
    return Unmanaged.passUnretained(event)
