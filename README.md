@@ -12,7 +12,9 @@ A native macOS 27 menu bar utility for fast adjacent-Space switching with **Cont
 
 **Enable Fast Switching** pauses/resumes the shortcut replacement and persists across launches. When disabled or missing permission, the normal macOS shortcuts pass through. **Quit Fast Spaces** removes the keyboard tap. Other modifier combinations and actual trackpad gestures are left alone.
 
-To keep the app elsewhere, move it before granting Accessibility permission. This build is locally ad-hoc signed; signing/notarization for public distribution is not included. No SIP changes, Dock preference modifications, launch agents, or login item installation are required.
+**Launch at Login** in the menu bar menu starts Fast Spaces automatically when you sign in. It is off until enabled, and its checkmark reflects the macOS login-item setting. If approval is required, the menu shows **Launch at Login (Approval Required)…** and opens System Settings → General → Login Items. Click the checked option to disable automatic launch. Move the app to its intended location before enabling this option.
+
+To keep the app elsewhere, move it before granting Accessibility permission. This build is locally ad-hoc signed; signing/notarization for public distribution is not included. No SIP changes, Dock preference modifications, or launch agents are required. Login-item registration is optional and managed by macOS.
 
 ## Build and verify
 

@@ -1,6 +1,7 @@
 import AppKit
 import FastSpacesCore
 import GestureBridge
+import ServiceManagement
 
 /// Owns a completely prepared gesture, so partial allocation never consumes a shortcut.
 final class PreparedSwipe: @unchecked Sendable {
@@ -24,6 +25,7 @@ final class PreparedSwipe: @unchecked Sendable {
  private var statusItem: NSStatusItem!
  private let statusLine = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
  private let enabledItem = NSMenuItem(title: "Enable Fast Switching", action: #selector(toggle), keyEquivalent: "")
+ private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
  private let keyboard = KeyboardTap()
  private let injectionQueue = DispatchQueue(label: "local.fastspaces.injection", qos: .userInteractive)
  private var permissionTimer: Timer?
@@ -50,6 +52,7 @@ final class PreparedSwipe: @unchecked Sendable {
   menu.addItem(statusLine)
   menu.addItem(.separator())
   enabledItem.target = self; menu.addItem(enabledItem)
+  loginItem.target = self; menu.addItem(loginItem)
   let permissions = NSMenuItem(title: "Open Accessibility Settings…", action: #selector(openPermissions), keyEquivalent: "")
   permissions.target = self; menu.addItem(permissions)
   let help = NSMenuItem(title: "About Fast Spaces…", action: #selector(showHelp), keyEquivalent: "")
@@ -101,6 +104,9 @@ final class PreparedSwipe: @unchecked Sendable {
    coordinator.isReady = false
   }
   enabledItem.state = enabled ? .on : .off
+  let loginStatus = SMAppService.mainApp.status
+  loginItem.state = loginStatus == .enabled ? .on : (loginStatus == .requiresApproval ? .mixed : .off)
+  loginItem.title = loginStatus == .requiresApproval ? "Launch at Login (Approval Required)…" : "Launch at Login"
   if !supported { statusLine.title = "Requires the verified macOS 27 gesture path." }
   else if !trusted { statusLine.title = "Accessibility permission required." }
   else if let tapFailure { statusLine.title = tapFailure }
@@ -121,6 +127,26 @@ final class PreparedSwipe: @unchecked Sendable {
  @objc private func openPermissions() {
   _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
   NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+ }
+ @objc private func toggleLaunchAtLogin() {
+  let service = SMAppService.mainApp
+  do {
+   switch service.status {
+   case .enabled: try service.unregister()
+   case .requiresApproval:
+    SMAppService.openSystemSettingsLoginItems()
+   default:
+    try service.register()
+    if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+   }
+  } catch {
+   let alert = NSAlert()
+   alert.messageText = "Couldn’t Change Launch at Login"
+   alert.informativeText = error.localizedDescription
+   alert.addButton(withTitle: "OK")
+   NSApp.activate(ignoringOtherApps: true); alert.runModal()
+  }
+  refresh()
  }
  @objc private func showHelp() {
   let alert = NSAlert()
