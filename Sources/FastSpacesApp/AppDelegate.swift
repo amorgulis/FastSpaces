@@ -36,6 +36,8 @@ final class PreparedSwipe: @unchecked Sendable {
  private lazy var lifecycle = TapLifecycle(driver: keyboard)
  private var lastTrusted = false
  private var tapFailure: String?
+ private var finishedLaunching = false
+ private var launchCommands: [URL] = []
  private lazy var coordinator = SwitchCoordinator(prepare: { direction in
   guard let swipe = PreparedSwipe(direction) else { return nil }
   return { swipe.post() }
@@ -92,6 +94,25 @@ final class PreparedSwipe: @unchecked Sendable {
    MainActor.assumeIsolated { self?.refresh() }
   }
   refresh()
+  finishedLaunching = true
+  let commands = launchCommands
+  launchCommands.removeAll()
+  for url in commands { performDirectCommand(url) }
+ }
+ func application(_ application: NSApplication, open urls: [URL]) {
+  for url in urls {
+   guard DirectCommand.direction(for: url) != nil else { continue }
+   if finishedLaunching { performDirectCommand(url) }
+   else { launchCommands.append(url) }
+  }
+ }
+ private func performDirectCommand(_ url: URL) {
+  refresh()
+  guard coordinator.isReady else { return }
+  guard let command = DirectCommand.direction(for: url) else { return }
+  let vertical = command == .missionControl || command == .appExpose
+  guard let direction = DirectCommand.direction(for: url, overviewActive: vertical && FSIsOverviewActive()) else { return }
+  if !coordinator.request(direction) { statusLine.title = "Gesture unavailable; direct command skipped." }
  }
  private func refresh() {
   let trusted = AXIsProcessTrusted()

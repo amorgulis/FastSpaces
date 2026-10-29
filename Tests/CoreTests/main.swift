@@ -122,6 +122,7 @@ for direction: Int32 in [-1, 1] {
 }
 check(!FSCanNavigateSnapshot(topology, "C" as CFString, 0), "boundary query rejects invalid direction")
 runShortcutTests()
+runDirectCommandTests()
 runCoordinatorTests()
 runLifecycleTests()
 print("Checks: \(checks), failures: \(failures)")

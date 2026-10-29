@@ -18,6 +18,32 @@ To keep the app elsewhere, move it before granting Accessibility permission. Thi
 
 ## Build and verify
 
+### SteerMouse direct commands
+
+Open the updated `dist/Fast Spaces.app` once to register its URL handler. In
+SteerMouse, assign each mouse button to **Open** with one of these URLs:
+
+- `fastspaces://left` — previous Space
+- `fastspaces://right` — next Space
+- `fastspaces://up` — Mission Control (Control–Up)
+- `fastspaces://down` — App Exposé (Control–Down)
+
+While Mission Control or App Exposé is open, either `up` or `down` dismisses it,
+matching the keyboard shortcuts. App Exposé requires its native trackpad gesture
+to be enabled in System Settings → Trackpad → More Gestures.
+
+These commands call FastSpaces directly, bypassing simulated keyboard shortcuts.
+They use the same fast gesture, display under the pointer, Space boundary checks,
+and bounded gesture queue as the Control–Arrow shortcuts. Fast switching must be enabled,
+Accessibility permission granted, and the session active. Opening a URL launches
+FastSpaces if needed; it does not bring a window forward. Unknown commands and
+URLs with extra paths, parameters, or fragments are ignored.
+
+You can also invoke them from Terminal with `open -g 'fastspaces://left'` or
+`open -g 'fastspaces://right'`.
+
+### Build commands
+
 Requires Swift 6 and macOS 27 command-line tools; no runtime dependencies or full Xcode installation.
 
 ```sh
